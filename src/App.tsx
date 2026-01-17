@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import './App.css'
 
 function App() {
@@ -9,6 +9,62 @@ function App() {
   const [total, setTotal] = useState(0)
   const [message, setMessage] = useState('')
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null)
+  const audioContextRef = useRef<AudioContext | null>(null)
+
+  // 効果音を再生する関数
+  const playSound = (isCorrect: boolean) => {
+    try {
+      // AudioContextを初期化（ブラウザがまだ許可していない場合）
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)()
+      }
+      const audioContext = audioContextRef.current
+
+      if (audioContext.state === 'suspended') {
+        audioContext.resume()
+      }
+
+      // 正解時：明るい上昇音
+      if (isCorrect) {
+        const oscillator = audioContext.createOscillator()
+        const gainNode = audioContext.createGain()
+
+        oscillator.connect(gainNode)
+        gainNode.connect(audioContext.destination)
+
+        oscillator.frequency.setValueAtTime(440, audioContext.currentTime) // A4
+        oscillator.frequency.setValueAtTime(554, audioContext.currentTime + 0.1) // C#5
+        oscillator.frequency.setValueAtTime(659, audioContext.currentTime + 0.2) // E5
+        oscillator.type = 'sine'
+
+        gainNode.gain.setValueAtTime(0.3, audioContext.currentTime)
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3)
+
+        oscillator.start(audioContext.currentTime)
+        oscillator.stop(audioContext.currentTime + 0.3)
+      } else {
+        // 不正解時：低い下降音
+        const oscillator = audioContext.createOscillator()
+        const gainNode = audioContext.createGain()
+
+        oscillator.connect(gainNode)
+        gainNode.connect(audioContext.destination)
+
+        oscillator.frequency.setValueAtTime(220, audioContext.currentTime) // A3
+        oscillator.frequency.setValueAtTime(165, audioContext.currentTime + 0.2) // E3
+        oscillator.type = 'sawtooth'
+
+        gainNode.gain.setValueAtTime(0.2, audioContext.currentTime)
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3)
+
+        oscillator.start(audioContext.currentTime)
+        oscillator.stop(audioContext.currentTime + 0.3)
+      }
+    } catch (error) {
+      // 効果音の再生に失敗してもアプリは続行
+      console.log('効果音の再生に失敗しました:', error)
+    }
+  }
 
   const generateQuestion = () => {
     const n1 = Math.floor(Math.random() * 20) + 1
@@ -34,14 +90,16 @@ function App() {
       setScore(score + 1)
       setMessage('正解！🎉')
       setIsCorrect(true)
+      playSound(true) // 正解の効果音
     } else {
       setMessage(`不正解。正解は ${correctAnswer} でした。`)
       setIsCorrect(false)
+      playSound(false) // 不正解の効果音
     }
 
     setTimeout(() => {
       generateQuestion()
-    }, 2000)
+    }, 1000) // 1秒
   }
 
   const handleReset = () => {
